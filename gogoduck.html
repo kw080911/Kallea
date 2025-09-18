@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Search Hub — DuckDuckGo + try-iframe</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    body { margin: 14px; }
+    header { display:flex; gap:12px; align-items:center; }
+    input[type="text"] { padding:8px; width:360px; }
+    button { padding:8px 10px; }
+    #container { display:grid; grid-template-columns: 1fr 2fr; gap:16px; margin-top:12px; }
+    .panel { border:1px solid #ddd; padding:12px; border-radius:8px; min-height:120px; }
+    iframe { width:100%; height:64vh; border:1px solid #ccc; border-radius:6px; }
+    .note { color:#666; font-size:0.9rem; margin-top:8px; }
+    .small { font-size:0.9rem; color:#444; margin-top:6px; }
+    a { color: #0b66ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2 style="margin:0">Search Hub</h2>
+    <div class="small">DuckDuckGo form + iframe tester (works only for sites that allow framing)</div>
+  </header>
+
+  <!-- DuckDuckGo site-search / generic search form (always works) -->
+  <div id="ddg" class="panel" style="margin-top:12px;">
+    <h3 style="margin-top:0">DuckDuckGo quick search</h3>
+    <!-- this submits directly to DuckDuckGo; results open in a new tab -->
+    <form action="https://duckduckgo.com/" method="get" target="_blank" onsubmit="document.querySelector('[name=q]').value = document.querySelector('[name=q]').value.trim()">
+      <input name="q" type="text" placeholder="Search DuckDuckGo (open in new tab)" />
+      <button type="submit">Search</button>
+      <!-- optional: search within a site -->
+      <div style="margin-top:8px">
+        <label style="font-size:0.9rem">Search only (optional) — site:</label>
+        <input type="text" name="sites" placeholder="example.com (optional)" style="width:220px; padding:6px;" />
+      </div>
+    </form>
+
+    <p class="note">This method sends the query to DuckDuckGo and opens results in a new tab. Many search engines don’t allow their full results pages to be embedded in someone else’s site (that’s controlled by headers such as <code>X-Frame-Options</code> or a CSP <code>frame-ancestors</code> directive). See MDN for details. :contentReference[oaicite:1]{index=1}</p>
+  </div>
+
+  <div id="container">
+    <!-- Left: quick links + iframe controls -->
+    <div class="panel">
+      <h3 style="margin-top:0">Try embedding a site</h3>
+
+      <div>
+        <input id="tryUrl" type="text" placeholder="https://example.com" />
+        <button id="loadBtn">Load in iframe</button>
+        <button id="openBtn">Open in new tab</button>
+      </div>
+
+      <div class="small" style="margin-top:8px">
+        Quick alternatives (open in new tab):
+        <ul>
+          <li><a href="https://duckduckgo.com/" target="_blank" rel="noreferrer">DuckDuckGo</a> — privacy-friendly search engine &amp; has a site-search form you can use. :contentReference[oaicite:2]{index=2}</li>
+          <li><a href="https://www.mojeek.com/" target="_blank" rel="noreferrer">Mojeek</a> — independent search engine (has site-search &amp; API). :contentReference[oaicite:3]{index=3}</li>
+          <li><a href="https://searx.org/" target="_blank" rel="noreferrer">SearxNG / Searx (meta-search)</a> — open-source; you can run your own instance and configure framing as you like.</li>
+        </ul>
+      </div>
+
+      <p class="note">
+        How to tell if a page can be embedded: open Developer Tools → Network → reload the page → check response headers for <code>X-Frame-Options</code> or a CSP <code>frame-ancestors</code> directive; if present and restrictive, the browser will block framing. :contentReference[oaicite:4]{index=4}
+      </p>
+    </div>
+
+    <!-- Right: iframe -->
+    <div class="panel">
+      <h3 style="margin-top:0">Iframe viewer</h3>
+      <iframe id="viewer" src="about:blank" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+      <div id="status" class="note">Frame is empty. Type a URL and click "Load in iframe". If the site blocks framing, you’ll see a blank frame or a console message like "refused to display".</div>
+    </div>
+  </div>
+
+  <script>
+    const loadBtn = document.getElementById('loadBtn');
+    const openBtn = document.getElementById('openBtn');
+    const tryUrl = document.getElementById('tryUrl');
+    const viewer = document.getElementById('viewer');
+    const status = document.getElementById('status');
+
+    function normalize(u) {
+      if (!u) return '';
+      u = u.trim();
+      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+      return u;
+    }
+
+    loadBtn.addEventListener('click', () => {
+      const u = normalize(tryUrl.value || '');
+      if (!u) { status.textContent = 'Please enter a URL.'; return; }
+      status.textContent = 'Loading ' + u + ' ... (if content is blocked this frame may remain blank)';
+      viewer.src = u;
+
+      // after a short delay, update status to give user a hint
+      setTimeout(() => {
+        // Many embeddability errors are enforced by the browser and will leave the frame blank.
+        // We can't reliably detect cross-origin frame contents due to browser security,
+        // so we give the user guidance in the status field instead.
+        status.innerHTML = 'If the site displays, it allows framing. If the frame is blank or the console shows "refused to display", the site blocks framing (X-Frame-Options or CSP frame-ancestors). See <a href="#" id="help">how to check headers</a>.';
+        const help = document.getElementById('help');
+        help.addEventListener('click', (e) => {
+          e.preventDefault();
+          alert('Open Developer Tools → Network → reload the site → click the main document request → look at Response Headers for X-Frame-Options or Content-Security-Policy containing frame-ancestors.');
+        });
+      }, 900);
+    });
+
+    openBtn.addEventListener('click', () => {
+      const u = normalize(tryUrl.value || '');
+      if (!u) { status.textContent = 'Please enter a URL.'; return; }
+      window.open(u, '_blank', 'noopener');
+    });
+
+    // convenience: Enter key in the URL field loads the iframe
+    tryUrl.addEventListener('keydown', e => { if (e.key === 'Enter') loadBtn.click(); });
+  </script>
+</body>
+</html>
